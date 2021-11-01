@@ -9,6 +9,42 @@ from starkware.cairo.common.math import assert_nn_le
 
 
 @contract_interface
+namespace IAccount:
+
+    func get_public_key() -> (res : felt):
+    end
+
+    func get_address() -> (res : felt):
+    end
+
+    func get_L1_address() -> (res : felt):
+    end
+
+    func get_nonce() -> (res : felt):
+    end
+
+    func set_public_key(new_public_key: felt):
+    end
+
+    func set_L1_address(new_L1_address: felt):
+    end
+
+    func is_valid_signature(hash: felt, signature_len: felt, signature: felt*):
+    end
+
+    func execute(
+            to: felt,
+            selector: felt,
+            calldata_len: felt,
+            calldata: felt*,
+            signature_len: felt,
+            signature: felt*
+        ) -> (response: felt):
+    end
+end
+
+
+@contract_interface
 namespace IERC20:
     func get_total_supply() -> (res : felt):
     end
@@ -41,7 +77,6 @@ struct Order:
     member base_quantity : felt
     member price : felt
     member expiration : felt
-    member tonce : felt
     member r: felt
     member s: felt
 end
@@ -57,8 +92,13 @@ func compute_order_hash{
         range_check_ptr}(
         order_ptr: Order*) -> (
         hash: felt):
-    return hash2{hash_ptr=pedersen_ptr}(
-        x=order, y=vote_info_ptr.vote)
+    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=order_ptr.user, y=order_ptr.base_asset)
+    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.quote_asset)
+    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.side)
+    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.base_quantity)
+    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.price)
+    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.expiration)
+    return (hash)
 end
 
 # Verifies an order signature
@@ -67,13 +107,15 @@ func verify_order_signature{
         range_check_ptr,
         ecdsa_ptr : SignatureBuiltin*}(
         order_ptr : Order*):
-    let (message) = compute_order_hash(order_ptr) 
+    let (orderhash) = compute_order_hash(order_ptr) 
 
     verify_ecdsa_signature(
         message=message,
         public_key=order_ptr.user,
         signature_r=order_ptr.r,
         signature_s=order_ptr.s)
+    IAccount.is_valid_signature(contract_address=order_ptr.user, hash=orderhash, 
+    func is_valid_signature(hash: felt, signature_len: felt, signature: felt*):
     return ()
 end
 
@@ -88,8 +130,8 @@ func fill_order{
         sell_order: Order,  
         price: felt,
         base_fill_quantity: felt):
-    assert buy_order.base_asset == sell_order.base_asset
-    assert buy_order.quote_asset == sell_order.quote_asset
+    assert buy_order.base_asset = sell_order.base_asset
+    assert buy_order.quote_asset = sell_order.quote_asset
     let (buyorderhash) = compute_order_hash(buy_order)
     let (sellorderhash) = compute_order_hash(sell_order)
     let (filledbuy) = orderstatus.read(buyorderhash)
