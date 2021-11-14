@@ -57,6 +57,7 @@ end
 
 
 struct Order:
+    member chain_id : felt
     member user : felt
     member base_asset : felt
     member quote_asset : felt
@@ -64,8 +65,8 @@ struct Order:
     member base_quantity : felt
     member price : felt
     member expiration : felt
-    member r: felt
-    member s: felt
+    member sig_r: felt
+    member sig_s: felt
 end
 
 # Storage variable for order tracking
@@ -95,14 +96,12 @@ func verify_order_signature{
         pedersen_ptr : HashBuiltin*,
         range_check_ptr,
         ecdsa_ptr : SignatureBuiltin*}(
-        order_ptr : Order*,
-        order_signature: felt*,
-        order_signature_len: felt):
+        order_ptr : Order*):
     alloc_locals
     let (orderhash) = compute_order_hash(order_ptr) 
     local pedersen_ptr : HashBuiltin* = pedersen_ptr
 
-    IAccount.is_valid_signature(contract_address=order_ptr.user, hash=orderhash, signature_len=order_signature_len, signature=order_signature)
+    #IAccount.is_valid_signature(contract_address=order_ptr.user, hash=orderhash, signature_len=64, signature=&order_ptr.sig_r)
     return ()
 end
 
@@ -115,10 +114,6 @@ func fill_order{
         range_check_ptr}(
         buy_order: Order, 
         sell_order: Order,  
-        buy_order_signature: felt,  
-        buy_order_signature_len: felt,  
-        sell_order_signature: felt,  
-        sell_order_signature_len: felt,  
         price: felt,
         base_fill_quantity: felt):
     alloc_locals
@@ -127,6 +122,8 @@ func fill_order{
     let fp_and_pc = get_fp_and_pc()
     local __fp__ = fp_and_pc.fp_val  
 
+    assert buy_order.chain_id = 1001
+    assert sell_order.chain_id = 1001
     assert buy_order.base_asset = sell_order.base_asset
     assert buy_order.quote_asset = sell_order.quote_asset
     let (buyorderhash) = compute_order_hash(&buy_order)
@@ -139,8 +136,8 @@ func fill_order{
     assert_nn_le(sell_order.price, price)
     assert_nn_le(base_fill_quantity, buy_order.base_quantity)
     assert_nn_le(base_fill_quantity, sell_order.base_quantity)
-    verify_order_signature{pedersen_ptr=pedersen_ptr}(&buy_order, &buy_order_signature, buy_order_signature_len)
-    verify_order_signature{pedersen_ptr=pedersen_ptr}(&sell_order, &sell_order_signature, sell_order_signature_len)
+    verify_order_signature{pedersen_ptr=pedersen_ptr}(&buy_order)
+    verify_order_signature{pedersen_ptr=pedersen_ptr}(&sell_order)
     let quote_fill_quantity = base_fill_quantity * price 
     IERC20.transfer_from(contract_address=buy_order.quote_asset, sender=buy_order.user, recipient=sell_order.user, amount=quote_fill_quantity)
     IERC20.transfer_from(contract_address=buy_order.base_asset, sender=sell_order.user, recipient=buy_order.user, amount=base_fill_quantity)

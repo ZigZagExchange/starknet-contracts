@@ -2,53 +2,58 @@
     {
         "members": [
             {
-                "name": "user",
+                "name": "chain_id",
                 "offset": 0,
                 "type": "felt"
             },
             {
-                "name": "base_asset",
+                "name": "user",
                 "offset": 1,
                 "type": "felt"
             },
             {
-                "name": "quote_asset",
+                "name": "base_asset",
                 "offset": 2,
                 "type": "felt"
             },
             {
-                "name": "side",
+                "name": "quote_asset",
                 "offset": 3,
                 "type": "felt"
             },
             {
-                "name": "base_quantity",
+                "name": "side",
                 "offset": 4,
                 "type": "felt"
             },
             {
-                "name": "price",
+                "name": "base_quantity",
                 "offset": 5,
                 "type": "felt"
             },
             {
-                "name": "expiration",
+                "name": "price",
                 "offset": 6,
                 "type": "felt"
             },
             {
-                "name": "r",
+                "name": "expiration",
                 "offset": 7,
                 "type": "felt"
             },
             {
-                "name": "s",
+                "name": "sig_r",
                 "offset": 8,
+                "type": "felt"
+            },
+            {
+                "name": "sig_s",
+                "offset": 9,
                 "type": "felt"
             }
         ],
         "name": "Order",
-        "size": 9,
+        "size": 10,
         "type": "struct"
     },
     {
@@ -60,22 +65,6 @@
             {
                 "name": "sell_order",
                 "type": "Order"
-            },
-            {
-                "name": "buy_order_signature",
-                "type": "felt"
-            },
-            {
-                "name": "buy_order_signature_len",
-                "type": "felt"
-            },
-            {
-                "name": "sell_order_signature",
-                "type": "felt"
-            },
-            {
-                "name": "sell_order_signature_len",
-                "type": "felt"
             },
             {
                 "name": "price",
