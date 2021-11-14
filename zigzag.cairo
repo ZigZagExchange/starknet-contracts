@@ -2,34 +2,22 @@
 %lang starknet
 %builtins pedersen range_check ecdsa
 
-from starkware.cairo.common.cairo_builtins import HashBuiltin
-from starkware.starknet.common.storage import Storage
+from starkware.cairo.common.cairo_builtins import (HashBuiltin, SignatureBuiltin)
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.math import assert_nn_le
+from starkware.cairo.common.registers import get_fp_and_pc
 
 
 @contract_interface
 namespace IAccount:
-
-    func get_public_key() -> (res : felt):
-    end
-
-    func get_address() -> (res : felt):
-    end
-
-    func get_L1_address() -> (res : felt):
-    end
-
     func get_nonce() -> (res : felt):
     end
 
-    func set_public_key(new_public_key: felt):
-    end
-
-    func set_L1_address(new_L1_address: felt):
-    end
-
-    func is_valid_signature(hash: felt, signature_len: felt, signature: felt*):
+    func is_valid_signature(
+            hash: felt,
+            signature_len: felt,
+            signature: felt*
+        ):
     end
 
     func execute(
@@ -37,8 +25,7 @@ namespace IAccount:
             selector: felt,
             calldata_len: felt,
             calldata: felt*,
-            signature_len: felt,
-            signature: felt*
+            nonce: felt
         ) -> (response: felt):
     end
 end
@@ -88,52 +75,62 @@ end
 
 # Computes a hash from an order
 func compute_order_hash{
-        pederson_ptr: HashBuiltin*,
+        pedersen_ptr: HashBuiltin*,
         range_check_ptr}(
         order_ptr: Order*) -> (
         hash: felt):
-    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=order_ptr.user, y=order_ptr.base_asset)
-    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.quote_asset)
-    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.side)
-    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.base_quantity)
-    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.price)
-    let (hash) = return hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.expiration)
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=1001, y=order_ptr.user) # 1001 = Starknet Alpha Chain ID
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.base_asset)
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.quote_asset)
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.side)
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.base_quantity)
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.price)
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.expiration)
     return (hash)
 end
 
 # Verifies an order signature
 func verify_order_signature{
+        syscall_ptr : felt*, 
         pedersen_ptr : HashBuiltin*,
         range_check_ptr,
         ecdsa_ptr : SignatureBuiltin*}(
-        order_ptr : Order*):
+        order_ptr : Order*,
+        order_signature: felt*,
+        order_signature_len: felt):
+    alloc_locals
     let (orderhash) = compute_order_hash(order_ptr) 
+    local pedersen_ptr : HashBuiltin* = pedersen_ptr
 
-    verify_ecdsa_signature(
-        message=message,
-        public_key=order_ptr.user,
-        signature_r=order_ptr.r,
-        signature_s=order_ptr.s)
-    IAccount.is_valid_signature(contract_address=order_ptr.user, hash=orderhash, 
-    func is_valid_signature(hash: felt, signature_len: felt, signature: felt*):
+    IAccount.is_valid_signature(contract_address=order_ptr.user, hash=orderhash, signature_len=order_signature_len, signature=order_signature)
     return ()
 end
 
 # Matches 2 orders and fills them up to the lower of the 2 quantities
 @external
 func fill_order{
-        storage_ptr : Storage*, 
+        syscall_ptr : felt*, 
         pedersen_ptr : HashBuiltin*,
         ecdsa_ptr : SignatureBuiltin*,
         range_check_ptr}(
         buy_order: Order, 
         sell_order: Order,  
+        buy_order_signature: felt,  
+        buy_order_signature_len: felt,  
+        sell_order_signature: felt,  
+        sell_order_signature_len: felt,  
         price: felt,
         base_fill_quantity: felt):
+    alloc_locals
+    
+    # Needed for dereferencing buy_order and sell_order
+    let fp_and_pc = get_fp_and_pc()
+    local __fp__ = fp_and_pc.fp_val  
+
     assert buy_order.base_asset = sell_order.base_asset
     assert buy_order.quote_asset = sell_order.quote_asset
-    let (buyorderhash) = compute_order_hash(buy_order)
-    let (sellorderhash) = compute_order_hash(sell_order)
+    let (buyorderhash) = compute_order_hash(&buy_order)
+    let (sellorderhash) = compute_order_hash(&sell_order)
     let (filledbuy) = orderstatus.read(buyorderhash)
     let (filledsell) = orderstatus.read(sellorderhash)
     assert filledbuy = 0
@@ -142,9 +139,11 @@ func fill_order{
     assert_nn_le(sell_order.price, price)
     assert_nn_le(base_fill_quantity, buy_order.base_quantity)
     assert_nn_le(base_fill_quantity, sell_order.base_quantity)
-    let (quote_fill_quantity) = base_fill_quantity * price 
-    IERC20.transferFrom(contract_address=buy_order.quote_asset, sender=buy_order.user, recipient=sell_order.user, amount=quote_fill_quantity)
-    IERC20.transferFrom(contract_address=buy_order.base_asset, sender=sell_order.user, recipient=buy_order.user, amount=base_fill_quantity)
+    verify_order_signature{pedersen_ptr=pedersen_ptr}(&buy_order, &buy_order_signature, buy_order_signature_len)
+    verify_order_signature{pedersen_ptr=pedersen_ptr}(&sell_order, &sell_order_signature, sell_order_signature_len)
+    let quote_fill_quantity = base_fill_quantity * price 
+    IERC20.transfer_from(contract_address=buy_order.quote_asset, sender=buy_order.user, recipient=sell_order.user, amount=quote_fill_quantity)
+    IERC20.transfer_from(contract_address=buy_order.base_asset, sender=sell_order.user, recipient=buy_order.user, amount=base_fill_quantity)
     orderstatus.write(buyorderhash, buy_order.base_quantity)
     orderstatus.write(sellorderhash, sell_order.base_quantity)
     return ()
@@ -153,7 +152,7 @@ end
 # Returns an order status
 @view
 func get_order_status{
-        storage_ptr : Storage*, pedersen_ptr : HashBuiltin*,
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*,
         range_check_ptr}(orderhash: felt) -> (filled : felt):
     let (filled) = orderstatus.read(orderhash)
     return (filled)
