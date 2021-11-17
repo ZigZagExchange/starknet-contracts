@@ -6,6 +6,9 @@ from starkware.cairo.common.cairo_builtins import (HashBuiltin, SignatureBuiltin
 from starkware.cairo.common.hash import hash2
 from starkware.cairo.common.math import assert_nn_le
 from starkware.cairo.common.registers import get_fp_and_pc
+from starkware.cairo.common.uint256 import (
+    Uint256
+)
 
 
 @contract_interface
@@ -48,7 +51,7 @@ namespace IERC20:
     func transfer(recipient: felt, amount: felt):
     end
 
-    func transfer_from(sender: felt, recipient: felt, amount: felt):
+    func transfer_from(sender: felt, recipient: felt, amount: Uint256):
     end
 
     func approve(spender: felt, amount: felt):
@@ -101,7 +104,7 @@ func verify_order_signature{
     let (orderhash) = compute_order_hash(order_ptr) 
     local pedersen_ptr : HashBuiltin* = pedersen_ptr
 
-    #IAccount.is_valid_signature(contract_address=order_ptr.user, hash=orderhash, signature_len=64, signature=&order_ptr.sig_r)
+    IAccount.is_valid_signature(contract_address=order_ptr.user, hash=orderhash, signature_len=2, signature=&order_ptr.sig_r)
     return ()
 end
 
@@ -130,8 +133,13 @@ func fill_order{
     let (sellorderhash) = compute_order_hash(&sell_order)
     let (filledbuy) = orderstatus.read(buyorderhash)
     let (filledsell) = orderstatus.read(sellorderhash)
-    assert filledbuy = 0
-    assert filledsell = 0
+    assert_nn_le(0, filledbuy) # Sanity Check
+    assert_nn_le(0, filledsell) # Sanity Check
+    assert_nn_le(0, buy_order.base_quantity) 
+    assert_nn_le(0, sell_order.base_quantity) 
+    assert_nn_le(0, base_fill_quantity)
+    assert_nn_le(filledbuy + base_fill_quantity, buy_order.base_quantity)
+    assert_nn_le(filledsell + base_fill_quantity, sell_order.base_quantity)
     assert_nn_le(price, buy_order.price)
     assert_nn_le(sell_order.price, price)
     assert_nn_le(base_fill_quantity, buy_order.base_quantity)
@@ -139,10 +147,10 @@ func fill_order{
     verify_order_signature{pedersen_ptr=pedersen_ptr}(&buy_order)
     verify_order_signature{pedersen_ptr=pedersen_ptr}(&sell_order)
     let quote_fill_quantity = base_fill_quantity * price 
-    IERC20.transfer_from(contract_address=buy_order.quote_asset, sender=buy_order.user, recipient=sell_order.user, amount=quote_fill_quantity)
-    IERC20.transfer_from(contract_address=buy_order.base_asset, sender=sell_order.user, recipient=buy_order.user, amount=base_fill_quantity)
-    orderstatus.write(buyorderhash, buy_order.base_quantity)
-    orderstatus.write(sellorderhash, sell_order.base_quantity)
+    IERC20.transfer_from(contract_address=buy_order.base_asset, sender=sell_order.user, recipient=buy_order.user, amount=Uint256(base_fill_quantity, 0))
+    IERC20.transfer_from(contract_address=buy_order.quote_asset, sender=buy_order.user, recipient=sell_order.user, amount=Uint256(quote_fill_quantity, 0))
+    orderstatus.write(buyorderhash, filledbuy + base_fill_quantity)
+    orderstatus.write(sellorderhash, filledsell + base_fill_quantity)
     return ()
 end
 
