@@ -9,6 +9,17 @@ from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.uint256 import (
     Uint256
 )
+from starkware.starknet.common.syscalls import get_caller_address
+
+@constructor
+func constructor{
+        syscall_ptr : felt*, 
+        pedersen_ptr : HashBuiltin*,
+        range_check_ptr
+    }(oracle: felt):
+    time_oracle.write(oracle)
+    return ()
+end
 
 
 @contract_interface
@@ -77,6 +88,18 @@ end
 func orderstatus(orderhash: felt) -> (filled: felt):
 end
 
+# Storage variable for current time
+# Temporary until timestamp or blocknum are available through Starknet
+@storage_var
+func current_time() -> (res: felt):
+end
+
+# Time Oracle Address
+# Temporary until timestamp or blocknum are available through Starknet
+@storage_var
+func time_oracle() -> (res: felt):
+end
+
 # Computes a hash from an order
 func compute_order_hash{
         pedersen_ptr: HashBuiltin*,
@@ -133,6 +156,7 @@ func fill_order{
     let (sellorderhash) = compute_order_hash(&sell_order)
     let (filledbuy) = orderstatus.read(buyorderhash)
     let (filledsell) = orderstatus.read(sellorderhash)
+    let (contract_time) = current_time.read()
     assert_nn_le(0, filledbuy) # Sanity Check
     assert_nn_le(0, filledsell) # Sanity Check
     assert_nn_le(0, buy_order.base_quantity) 
@@ -144,6 +168,8 @@ func fill_order{
     assert_nn_le(sell_order.price, price)
     assert_nn_le(base_fill_quantity, buy_order.base_quantity)
     assert_nn_le(base_fill_quantity, sell_order.base_quantity)
+    assert_nn_le(contract_time, buy_order.expiration)
+    assert_nn_le(contract_time, sell_order.expiration)
     verify_order_signature{pedersen_ptr=pedersen_ptr}(&buy_order)
     verify_order_signature{pedersen_ptr=pedersen_ptr}(&sell_order)
     let quote_fill_quantity = base_fill_quantity * price 
@@ -151,6 +177,42 @@ func fill_order{
     IERC20.transfer_from(contract_address=buy_order.quote_asset, sender=buy_order.user, recipient=sell_order.user, amount=Uint256(quote_fill_quantity, 0))
     orderstatus.write(buyorderhash, filledbuy + base_fill_quantity)
     orderstatus.write(sellorderhash, filledsell + base_fill_quantity)
+    return ()
+end
+
+# Cancels an order by setting the fill quantity to greater than the order size
+@external
+func cancel_order{
+        syscall_ptr : felt*, 
+        pedersen_ptr : HashBuiltin*,
+        ecdsa_ptr : SignatureBuiltin*,
+        range_check_ptr}(
+        order: Order
+    ):
+    alloc_locals
+    
+    # Needed for dereferencing order
+    let fp_and_pc = get_fp_and_pc()
+    local __fp__ = fp_and_pc.fp_val  
+
+    let (orderhash) = compute_order_hash(&order)
+    orderstatus.write(orderhash, order.base_quantity + 1)
+    return ()
+end
+
+# Sets the current time
+@external
+func set_current_time{
+        syscall_ptr : felt*, 
+        pedersen_ptr : HashBuiltin*,
+        ecdsa_ptr : SignatureBuiltin*,
+        range_check_ptr}(
+        updated_time: felt
+    ):
+    let (updater) = get_caller_address()
+    let (oracle) = time_oracle.read()
+    assert updater = oracle
+    current_time.write(updated_time)
     return ()
 end
 

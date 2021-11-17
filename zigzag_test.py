@@ -17,6 +17,9 @@ ACCOUNT_FILE = os.path.join(
 def uint(a):
     return(a, 0)
 
+def unixms():
+    return int(time.time()*100)
+
 class Order:
     def __init__(self, user, base_asset, quote_asset, side, base_quantity, price, expiration):
         self.chain_id = 1001
@@ -60,6 +63,7 @@ async def test_send_order():
     # Generate key pairs.
     signer1 = Signer(1234322181823212312)
     signer2 = Signer(1039489391002310220)
+    signer3 = Signer(8439329023933332923)
 
     # Deploy the contract.
     base_asset_owner = await starknet.deploy(
@@ -69,6 +73,10 @@ async def test_send_order():
     quote_asset_owner = await starknet.deploy(
         source=ACCOUNT_FILE,
         constructor_calldata=[signer2.public_key]
+    )
+    oracle = await starknet.deploy(
+        source=ACCOUNT_FILE,
+        constructor_calldata=[signer3.public_key]
     )
     base_asset = await starknet.deploy(
         source=ERC20_FILE,
@@ -80,9 +88,22 @@ async def test_send_order():
     )
     contract = await starknet.deploy(
         source=CONTRACT_FILE,
+        constructor_calldata=[oracle.contract_address]
     )
     await base_asset_owner.initialize(base_asset_owner.contract_address).invoke()
     await quote_asset_owner.initialize(quote_asset_owner.contract_address).invoke()
+    await oracle.initialize(oracle.contract_address).invoke()
+
+    # Set contract time
+    # Temporary: will not be required after Starknet supports time
+    now = unixms()
+    await signer3.send_transaction(oracle, contract.contract_address, 'set_current_time', [now])
+
+    # Fail to set time with non-oracle account
+    with pytest.raises(Exception) as e_info:
+        await signer2.send_transaction(oracle, contract.contract_address, 'set_current_time', [now])
+
+    
 
     base_asset_balance_owner = await base_asset.balance_of(base_asset_owner.contract_address).call()
     base_asset_balance_recipient = await base_asset.balance_of(quote_asset_owner.contract_address).call()
@@ -109,7 +130,7 @@ async def test_send_order():
     buy_price = 1
     exec_price = 1
     sell_price = 1
-    expiration = int(time.time())
+    expiration = unixms() + 1
     sell_order = Order(base_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 1, base_quantity, sell_price, expiration)
     buy_order = Order(quote_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 0, base_quantity, buy_price, expiration)
 
@@ -152,7 +173,7 @@ async def test_send_order():
     buy_price = 3
     exec_price = 2
     sell_price = 1
-    expiration = int(time.time()) + 1000
+    expiration = unixms() + 1000
     sell_order = Order(base_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 1, sell_quantity, sell_price, expiration)
     buy_order = Order(quote_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 0, buy_quantity, buy_price, expiration)
 
@@ -218,9 +239,30 @@ async def test_send_order():
     with pytest.raises(Exception) as e_info:
         buy_price = 3
         sell_price = 4
-        expiration = int(time.time()) + 1010
+        expiration = unixms() + 1010
         buy_order = Order(quote_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 0, buy_quantity, buy_price, expiration)
         sell_order = Order(base_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 1, sell_quantity, sell_price, expiration)
+        await contract.fill_order(
+            sell_order=sell_order.to_starknet_args(signer1),
+            buy_order=buy_order.to_starknet_args(signer2), 
+            price=exec_price,
+            base_fill_quantity=fill_quantity
+        ).invoke()
+
+    # Can't fill an expired order
+    contract_time = unixms()
+    await signer3.send_transaction(oracle, contract.contract_address, 'set_current_time', [contract_time])
+    with pytest.raises(Exception) as e_info:
+        buy_price = 4
+        sell_price = 3
+        exec_price = 4
+        buy_quantity = 25
+        sell_quantity = 25
+        fill_quantity = 25
+        expiration_bad = unixms() - 100000
+        expiration_good = unixms() + 100000
+        buy_order = Order(quote_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 0, buy_quantity, buy_price, expiration_bad)
+        sell_order = Order(base_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 1, sell_quantity, sell_price, expiration_good)
         await contract.fill_order(
             sell_order=sell_order.to_starknet_args(signer1),
             buy_order=buy_order.to_starknet_args(signer2), 
