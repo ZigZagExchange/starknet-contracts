@@ -4,7 +4,7 @@
 
 from starkware.cairo.common.cairo_builtins import (HashBuiltin, SignatureBuiltin)
 from starkware.cairo.common.hash import hash2
-from starkware.cairo.common.math import assert_nn_le
+from starkware.cairo.common.math import assert_nn_le, unsigned_div_rem
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.uint256 import (
     Uint256
@@ -75,7 +75,7 @@ struct Order:
     member user : felt
     member base_asset : felt
     member quote_asset : felt
-    member side : felt
+    member side : felt # 0 = buy, 1 = sell
     member base_quantity : felt
     member price : felt
     member expiration : felt
@@ -148,6 +148,7 @@ func fill_order{
     let fp_and_pc = get_fp_and_pc()
     local __fp__ = fp_and_pc.fp_val  
 
+    # Run order checks
     assert buy_order.chain_id = 1001
     assert sell_order.chain_id = 1001
     assert buy_order.base_asset = sell_order.base_asset
@@ -170,10 +171,22 @@ func fill_order{
     assert_nn_le(base_fill_quantity, sell_order.base_quantity)
     assert_nn_le(contract_time, buy_order.expiration)
     assert_nn_le(contract_time, sell_order.expiration)
+
+    # Check sigs
     verify_order_signature{pedersen_ptr=pedersen_ptr}(&buy_order)
     verify_order_signature{pedersen_ptr=pedersen_ptr}(&sell_order)
+    
+    # Calculate protocol fee
+    # 0 for now, can edit later
+    const PROTOCOL_FEE_BIPS = 0
+    let (fee, remainder) = unsigned_div_rem(base_fill_quantity * PROTOCOL_FEE_BIPS, 10000)
+    let base_fill_quantity_minus_fee = base_fill_quantity - fee
+    
+
+    # Transfer tokens
+    # For now, fee is paid by seller. Can change later
     let quote_fill_quantity = base_fill_quantity * price 
-    IERC20.transfer_from(contract_address=buy_order.base_asset, sender=sell_order.user, recipient=buy_order.user, amount=Uint256(base_fill_quantity, 0))
+    IERC20.transfer_from(contract_address=buy_order.base_asset, sender=sell_order.user, recipient=buy_order.user, amount=Uint256(base_fill_quantity_minus_fee, 0))
     IERC20.transfer_from(contract_address=buy_order.quote_asset, sender=buy_order.user, recipient=sell_order.user, amount=Uint256(quote_fill_quantity, 0))
     orderstatus.write(buyorderhash, filledbuy + base_fill_quantity)
     orderstatus.write(sellorderhash, filledsell + base_fill_quantity)
