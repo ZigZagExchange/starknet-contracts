@@ -41,7 +41,7 @@ func constructor{
     # get_caller_address() returns '0' in the constructor;
     # therefore, recipient parameter is included
     decimals.write(18)
-    _mint(recipient, Uint256(1000, 0))
+    _mint(recipient, Uint256(100000000000000000000, 0))
     return ()
 end
 

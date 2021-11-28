@@ -34,26 +34,43 @@
             {
                 "name": "price",
                 "offset": 6,
-                "type": "felt"
+                "type": "PriceRatio"
             },
             {
                 "name": "expiration",
-                "offset": 7,
-                "type": "felt"
-            },
-            {
-                "name": "sig_r",
                 "offset": 8,
                 "type": "felt"
             },
             {
-                "name": "sig_s",
+                "name": "sig_r",
                 "offset": 9,
+                "type": "felt"
+            },
+            {
+                "name": "sig_s",
+                "offset": 10,
                 "type": "felt"
             }
         ],
         "name": "Order",
-        "size": 10,
+        "size": 11,
+        "type": "struct"
+    },
+    {
+        "members": [
+            {
+                "name": "numerator",
+                "offset": 0,
+                "type": "felt"
+            },
+            {
+                "name": "denominator",
+                "offset": 1,
+                "type": "felt"
+            }
+        ],
+        "name": "PriceRatio",
+        "size": 2,
         "type": "struct"
     },
     {
@@ -78,8 +95,8 @@
                 "type": "Order"
             },
             {
-                "name": "price",
-                "type": "felt"
+                "name": "fill_price",
+                "type": "PriceRatio"
             },
             {
                 "name": "base_fill_quantity",

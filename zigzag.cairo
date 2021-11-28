@@ -70,6 +70,11 @@ namespace IERC20:
 end
 
 
+struct PriceRatio:
+    member numerator: felt
+    member denominator: felt
+end
+
 struct Order:
     member chain_id : felt
     member user : felt
@@ -77,7 +82,7 @@ struct Order:
     member quote_asset : felt
     member side : felt # 0 = buy, 1 = sell
     member base_quantity : felt
-    member price : felt
+    member price : PriceRatio
     member expiration : felt
     member sig_r: felt
     member sig_s: felt
@@ -111,7 +116,8 @@ func compute_order_hash{
     let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.quote_asset)
     let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.side)
     let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.base_quantity)
-    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.price)
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.price.numerator)
+    let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.price.denominator)
     let (hash) = hash2{hash_ptr=pedersen_ptr}(x=hash, y=order_ptr.expiration)
     return (hash)
 end
@@ -140,7 +146,7 @@ func fill_order{
         range_check_ptr}(
         buy_order: Order, 
         sell_order: Order,  
-        price: felt,
+        fill_price: PriceRatio,
         base_fill_quantity: felt):
     alloc_locals
     
@@ -153,6 +159,8 @@ func fill_order{
     assert sell_order.chain_id = 1001
     assert buy_order.base_asset = sell_order.base_asset
     assert buy_order.quote_asset = sell_order.quote_asset
+    assert buy_order.side = 0
+    assert sell_order.side = 1
     let (buyorderhash) = compute_order_hash(&buy_order)
     let (sellorderhash) = compute_order_hash(&sell_order)
     let (filledbuy) = orderstatus.read(buyorderhash)
@@ -165,8 +173,8 @@ func fill_order{
     assert_nn_le(0, base_fill_quantity)
     assert_nn_le(filledbuy + base_fill_quantity, buy_order.base_quantity)
     assert_nn_le(filledsell + base_fill_quantity, sell_order.base_quantity)
-    assert_nn_le(price, buy_order.price)
-    assert_nn_le(sell_order.price, price)
+    assert_nn_le(fill_price.numerator * buy_order.price.denominator, buy_order.price.numerator * fill_price.denominator)
+    assert_nn_le(sell_order.price.numerator * fill_price.denominator, fill_price.numerator * sell_order.price.denominator)
     assert_nn_le(base_fill_quantity, buy_order.base_quantity)
     assert_nn_le(base_fill_quantity, sell_order.base_quantity)
     assert_nn_le(contract_time, buy_order.expiration)
@@ -185,7 +193,7 @@ func fill_order{
 
     # Transfer tokens
     # For now, fee is paid by seller. Can change later
-    let quote_fill_quantity = base_fill_quantity * price 
+    let (quote_fill_quantity, remainder_fill_qty) = unsigned_div_rem(base_fill_quantity * fill_price.numerator, fill_price.denominator)
     IERC20.transfer_from(contract_address=buy_order.base_asset, sender=sell_order.user, recipient=buy_order.user, amount=Uint256(base_fill_quantity_minus_fee, 0))
     IERC20.transfer_from(contract_address=buy_order.quote_asset, sender=buy_order.user, recipient=sell_order.user, amount=Uint256(quote_fill_quantity, 0))
     orderstatus.write(buyorderhash, filledbuy + base_fill_quantity)
@@ -208,6 +216,8 @@ func cancel_order{
     let fp_and_pc = get_fp_and_pc()
     local __fp__ = fp_and_pc.fp_val  
 
+    let (caller) = get_caller_address()
+    assert caller = order.user
     let (orderhash) = compute_order_hash(&order)
     orderstatus.write(orderhash, order.base_quantity + 1)
     return ()
