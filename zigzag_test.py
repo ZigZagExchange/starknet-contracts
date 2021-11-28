@@ -280,12 +280,12 @@ async def test_send_order():
         ).invoke()
 
     # Fill Big orders
-    buy_price = (405736, 100)
-    sell_price = (405736, 100)
+    buy_price = (405736, 100000)
+    sell_price = (405736, 100000)
     buy_quantity = 2000000000000000000
     sell_quantity = 2000000000000000000
     fill_quantity = 2000000000000000000
-    exec_price = (405736, 100)
+    exec_price = (405736, 100000)
     expiration_good = unixms() + 100000
     buy_order = Order(quote_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 0, buy_quantity, buy_price, expiration_good)
     sell_order = Order(base_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 1, sell_quantity, sell_price, expiration_good)
@@ -301,9 +301,26 @@ async def test_send_order():
     quote_asset_balance_recipient = await quote_asset.balance_of(base_asset_owner.contract_address).call()
     buy_order_filled = await contract.get_order_status(buy_order.hash()).call()
     sell_order_filled = await contract.get_order_status(sell_order.hash()).call()
-    #assert base_asset_balance_owner.result.res == uint(949)
-    #assert base_asset_balance_recipient.result.res == uint(51)
-    #assert quote_asset_balance_owner.result.res == uint(924)
-    #assert quote_asset_balance_recipient.result.res == uint(76)
-    #assert buy_order_filled.result.filled == 25
-    #assert sell_order_filled.result.filled == 50
+
+    # Real ETH-USDT order
+    buy_price = (1, 249999999)
+    sell_price = (1, 249999999)
+    buy_quantity = 2000000000000000000
+    sell_quantity = 2000000000000000000
+    fill_quantity = 2000000000000000000
+    exec_price = (1, 249999999)
+    expiration_good = unixms() + 100000
+    buy_order = Order(quote_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 0, buy_quantity, buy_price, expiration_good)
+    sell_order = Order(base_asset_owner.contract_address, base_asset.contract_address, quote_asset.contract_address, 1, sell_quantity, sell_price, expiration_good)
+    await contract.fill_order(
+        sell_order=sell_order.to_starknet_args(signer1),
+        buy_order=buy_order.to_starknet_args(signer2), 
+        fill_price=exec_price,
+        base_fill_quantity=fill_quantity
+    ).invoke()
+    base_asset_balance_owner = await base_asset.balance_of(base_asset_owner.contract_address).call()
+    base_asset_balance_recipient = await base_asset.balance_of(quote_asset_owner.contract_address).call()
+    quote_asset_balance_owner = await quote_asset.balance_of(quote_asset_owner.contract_address).call()
+    quote_asset_balance_recipient = await quote_asset.balance_of(base_asset_owner.contract_address).call()
+    buy_order_filled = await contract.get_order_status(buy_order.hash()).call()
+    sell_order_filled = await contract.get_order_status(sell_order.hash()).call()
