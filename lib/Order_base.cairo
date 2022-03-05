@@ -6,9 +6,9 @@ from starkware.cairo.common.hash_state import (
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.math import assert_nn_le
 from starkware.cairo.common.registers import get_fp_and_pc
-
 from starkware.starknet.common.syscalls import get_caller_address, get_block_timestamp
-from config import (TRUE, CHAIN_ID, BUY_SIDE, SELL_SIDE)
+
+from lib.config import (TRUE, CHAIN_ID, BUY_SIDE, SELL_SIDE)
 
 ##############
 # Structs

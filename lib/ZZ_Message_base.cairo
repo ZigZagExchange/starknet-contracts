@@ -6,9 +6,9 @@ from starkware.cairo.common.hash_state import (
 from starkware.cairo.common.cairo_builtins import HashBuiltin
 from starkware.cairo.common.registers import get_fp_and_pc
 
-from Order_base import PriceRatio, Order, compute_order_hash
+from lib.Order_base import PriceRatio, Order, compute_order_hash
 from lib.StructHash import StarkNet_Domain, hashDomain
-from config import DOMAIN_NAME, APP_VERSION, CHAIN_ID, STARKNET_MESSAGE_PREFIX, TRUE, STARKNET_DOMAIN_TYPE_HASH, ORDER_TYPE_HASH
+from lib.config import DOMAIN_NAME, APP_VERSION, CHAIN_ID, STARKNET_MESSAGE_PREFIX, TRUE, STARKNET_DOMAIN_TYPE_HASH, ORDER_TYPE_HASH
 
 ##############
 # STRUCTS

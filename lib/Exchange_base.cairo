@@ -8,8 +8,8 @@ from starkware.cairo.common.uint256 import (
 )
 from starkware.cairo.common.registers import get_fp_and_pc
 
-from config import TRUE, PROTOCOL_FEE_BIPS
-from Order_base import PriceRatio
+from lib.config import TRUE, PROTOCOL_FEE_BIPS
+from lib.Order_base import PriceRatio
 
 ##############
 # Interfaces
