@@ -2,58 +2,97 @@
     {
         "members": [
             {
-                "name": "chain_id",
+                "name": "message_prefix",
                 "offset": 0,
                 "type": "felt"
             },
             {
-                "name": "user",
+                "name": "domain_prefix",
                 "offset": 1,
-                "type": "felt"
+                "type": "StarkNet_Domain"
             },
             {
-                "name": "base_asset",
-                "offset": 2,
-                "type": "felt"
-            },
-            {
-                "name": "quote_asset",
-                "offset": 3,
-                "type": "felt"
-            },
-            {
-                "name": "side",
+                "name": "sender",
                 "offset": 4,
                 "type": "felt"
             },
             {
-                "name": "base_quantity",
+                "name": "order",
                 "offset": 5,
-                "type": "felt"
-            },
-            {
-                "name": "price",
-                "offset": 6,
-                "type": "PriceRatio"
-            },
-            {
-                "name": "expiration",
-                "offset": 8,
-                "type": "felt"
+                "type": "Order"
             },
             {
                 "name": "sig_r",
-                "offset": 9,
+                "offset": 12,
                 "type": "felt"
             },
             {
                 "name": "sig_s",
-                "offset": 10,
+                "offset": 13,
+                "type": "felt"
+            }
+        ],
+        "name": "ZZ_Message",
+        "size": 14,
+        "type": "struct"
+    },
+    {
+        "members": [
+            {
+                "name": "name",
+                "offset": 0,
+                "type": "felt"
+            },
+            {
+                "name": "version",
+                "offset": 1,
+                "type": "felt"
+            },
+            {
+                "name": "chain_id",
+                "offset": 2,
+                "type": "felt"
+            }
+        ],
+        "name": "StarkNet_Domain",
+        "size": 3,
+        "type": "struct"
+    },
+    {
+        "members": [
+            {
+                "name": "base_asset",
+                "offset": 0,
+                "type": "felt"
+            },
+            {
+                "name": "quote_asset",
+                "offset": 1,
+                "type": "felt"
+            },
+            {
+                "name": "side",
+                "offset": 2,
+                "type": "felt"
+            },
+            {
+                "name": "base_quantity",
+                "offset": 3,
+                "type": "felt"
+            },
+            {
+                "name": "price",
+                "offset": 4,
+                "type": "PriceRatio"
+            },
+            {
+                "name": "expiration",
+                "offset": 6,
                 "type": "felt"
             }
         ],
         "name": "Order",
-        "size": 11,
+        "size": 7,
         "type": "struct"
     },
     {
@@ -74,12 +113,19 @@
         "type": "struct"
     },
     {
-        "inputs": [
+        "inputs": [],
+        "name": "test",
+        "outputs": [
             {
-                "name": "oracle",
+                "name": "hash",
                 "type": "felt"
             }
         ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
         "name": "constructor",
         "outputs": [],
         "type": "constructor"
@@ -88,11 +134,11 @@
         "inputs": [
             {
                 "name": "buy_order",
-                "type": "Order"
+                "type": "ZZ_Message"
             },
             {
                 "name": "sell_order",
-                "type": "Order"
+                "type": "ZZ_Message"
             },
             {
                 "name": "fill_price",
@@ -111,21 +157,10 @@
         "inputs": [
             {
                 "name": "order",
-                "type": "Order"
+                "type": "ZZ_Message"
             }
         ],
         "name": "cancel_order",
-        "outputs": [],
-        "type": "function"
-    },
-    {
-        "inputs": [
-            {
-                "name": "updated_time",
-                "type": "felt"
-            }
-        ],
-        "name": "set_current_time",
         "outputs": [],
         "type": "function"
     },
